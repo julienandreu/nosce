@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "nosce": {
+      "type": "stdio",
+      "command": "./target/release/nosce",
+      "args": ["--output-dir", "${NOSCE_OUTPUT_DIR:-~/.nosce/output}"]
+    }
+  }
+}
