@@ -73,15 +73,6 @@ pub async fn list_submodule_packages(output_dir: &Path, submodule: &str) -> Vec<
         .unwrap_or_default()
 }
 
-/// List profile IDs that have reports for a given date.
-/// Looks for `reports/YYYY-MM-DD/<profile>.md` files.
-pub async fn list_report_profiles(output_dir: &Path, date: &str) -> Vec<String> {
-    let dir = output_dir.join("reports").join(date);
-    task::spawn_blocking(move || list_md_stems_sync(&dir))
-        .await
-        .unwrap_or_default()
-}
-
 /// List dates that have media manifests in the media/ directory.
 /// Scans `<output>/media/` for subdirectories containing `manifest.json`.
 pub async fn list_media_dates(output_dir: &Path) -> Vec<String> {
@@ -193,7 +184,11 @@ fn list_media_dates_sync(media_dir: &Path) -> Vec<String> {
         Ok(e) => e,
         Err(err) => {
             if err.kind() != std::io::ErrorKind::NotFound {
-                tracing::warn!("Failed to read media directory {}: {}", media_dir.display(), err);
+                tracing::warn!(
+                    "Failed to read media directory {}: {}",
+                    media_dir.display(),
+                    err
+                );
             }
             return dates;
         }

@@ -3,11 +3,11 @@ version: 1
 # Defaults (overridable via skill arguments)
 # input: path to a git repository containing submodules
 # output: path where reports and docs are written
-input: /Users/julien/github/saris-ai/knowledge
-output: /Users/julien/github/saris-ai/knowledge/output
+input: ~/.nosce/input
+output: ~/.nosce/output
 
 # GitHub owner for gh CLI (PR lookups)
-github_owner: saris-ai
+github_owner: nosce
 
 # Report settings
 reports:
