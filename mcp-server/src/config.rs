@@ -1,11 +1,45 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+/// Full settings parsed from nosce.yml.
+#[derive(Debug, Clone)]
+pub struct NosceSettings {
+    pub input_dir: Option<PathBuf>,
+    pub output_dir: Option<PathBuf>,
+    pub github_owner: Option<String>,
+    pub timezone: Option<String>,
+    pub doc_categories: Vec<String>,
+    pub profiles: Vec<ProfileDef>,
+}
+
+/// Raw YAML structure for deserialization.
 #[derive(Debug, Deserialize)]
 struct NosceConfig {
     #[serde(default)]
+    input: Option<String>,
+    #[serde(default)]
+    output: Option<String>,
+    #[serde(default)]
+    github_owner: Option<String>,
+    #[serde(default)]
+    reports: Option<ReportsConfig>,
+    #[serde(default)]
+    docs: Option<DocsConfig>,
+    #[serde(default)]
     profiles: Vec<ProfileDef>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReportsConfig {
+    #[serde(default)]
+    timezone: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DocsConfig {
+    #[serde(default)]
+    categories: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -17,31 +51,72 @@ pub struct ProfileDef {
     pub focus: Vec<String>,
 }
 
-/// Load profile definitions from nosce.yml. Returns defaults if the file
-/// is missing or the `profiles` key is absent.
-pub fn load_profiles(config_path: &Path) -> Vec<ProfileDef> {
+/// Load the full settings from nosce.yml. Returns sensible defaults if the
+/// file is missing or fields are absent.
+pub fn load_settings(config_path: &Path) -> NosceSettings {
     let content = match std::fs::read_to_string(config_path) {
         Ok(c) => c,
         Err(_) => {
             tracing::info!(
-                "Config not found at {}, using default profiles",
+                "Config not found at {}, using defaults",
                 config_path.display()
             );
-            return default_profiles();
+            return NosceSettings {
+                input_dir: None,
+                output_dir: None,
+                github_owner: None,
+                timezone: None,
+                doc_categories: default_doc_categories(),
+                profiles: default_profiles(),
+            };
         }
     };
 
     match serde_yaml::from_str::<NosceConfig>(&content) {
-        Ok(cfg) if !cfg.profiles.is_empty() => cfg.profiles,
-        Ok(_) => {
-            tracing::info!("No profiles in config, using defaults");
-            default_profiles()
-        }
+        Ok(cfg) => NosceSettings {
+            input_dir: cfg.input.map(|s| PathBuf::from(shellexpand::tilde(&s).into_owned())),
+            output_dir: cfg.output.map(|s| PathBuf::from(shellexpand::tilde(&s).into_owned())),
+            github_owner: cfg.github_owner,
+            timezone: cfg.reports.and_then(|r| r.timezone),
+            doc_categories: cfg
+                .docs
+                .map(|d| {
+                    if d.categories.is_empty() {
+                        default_doc_categories()
+                    } else {
+                        d.categories
+                    }
+                })
+                .unwrap_or_else(default_doc_categories),
+            profiles: if cfg.profiles.is_empty() {
+                default_profiles()
+            } else {
+                cfg.profiles
+            },
+        },
         Err(err) => {
-            tracing::warn!("Failed to parse config: {err}, using default profiles");
-            default_profiles()
+            tracing::warn!("Failed to parse config: {err}, using defaults");
+            NosceSettings {
+                input_dir: None,
+                output_dir: None,
+                github_owner: None,
+                timezone: None,
+                doc_categories: default_doc_categories(),
+                profiles: default_profiles(),
+            }
         }
     }
+}
+
+
+fn default_doc_categories() -> Vec<String> {
+    vec![
+        "overview".into(),
+        "architecture".into(),
+        "apis".into(),
+        "databases".into(),
+        "dependencies".into(),
+    ]
 }
 
 fn default_profiles() -> Vec<ProfileDef> {
