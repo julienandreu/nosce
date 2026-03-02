@@ -5,13 +5,22 @@ use tracing_subscriber::{filter::LevelFilter, EnvFilter};
 
 mod config;
 mod fs_ops;
+mod prompts;
 mod server;
+mod update;
 mod web;
 
 #[derive(Parser, Debug)]
 #[command(
     name = "nosce",
     version,
+    long_version = const_format::formatcp!(
+        "{} ({} {})\ntarget: {}",
+        env!("CARGO_PKG_VERSION"),
+        env!("NOSCE_COMMIT_SHORT"),
+        env!("NOSCE_COMMIT_DATE"),
+        env!("NOSCE_TARGET"),
+    ),
     about = "MCP server and web frontend for nosce docs and reports",
     long_about = "nosce serves generated documentation and daily sync reports. \
         It can run as an MCP server (for AI assistants) or as a \
@@ -40,6 +49,10 @@ struct Cli {
     /// Path to the nosce output directory containing docs/ and reports/
     #[arg(short, long, env = "NOSCE_OUTPUT_DIR", global = true)]
     output_dir: Option<String>,
+
+    /// Path to the input git repository containing submodules
+    #[arg(short, long, env = "NOSCE_INPUT_DIR", global = true)]
+    input_dir: Option<String>,
 
     /// Increase log verbosity (-v info, -vv debug, -vvv trace)
     #[arg(short, long, action = clap::ArgAction::Count, global = true)]
@@ -76,6 +89,12 @@ enum Commands {
     },
     /// Stop a running nosce daemon started with `serve -d`
     Stop,
+    /// Check for updates and self-update from GitHub Releases
+    Update {
+        /// Only check for available updates, don't install
+        #[arg(long)]
+        check: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -91,6 +110,11 @@ fn main() -> Result<()> {
     // Handle stop subcommand (no tokio runtime needed)
     if matches!(cli.command, Some(Commands::Stop)) {
         return stop_daemon();
+    }
+
+    // Handle update subcommand (manages its own runtime)
+    if let Some(Commands::Update { check }) = &cli.command {
+        return update::run_update(*check);
     }
 
     // Handle detach before spawning tokio threads
@@ -135,15 +159,39 @@ async fn async_main(cli: Cli) -> Result<()> {
         anyhow::bail!("Output directory does not exist: {output_dir}");
     }
 
-    // Load profiles from nosce.yml (look in cwd then fall back to defaults)
+    // Load full settings from nosce.yml
     let config_path = std::path::Path::new("nosce.yml");
-    let profiles = config::load_profiles(config_path);
-    tracing::info!("Loaded {} profile(s)", profiles.len());
+    let mut settings = config::load_settings(config_path);
+
+    // CLI flags override config file values
+    if let Some(ref input_raw) = cli.input_dir {
+        let expanded = shellexpand::tilde(input_raw).to_string();
+        settings.input_dir = Some(std::path::PathBuf::from(expanded));
+    }
+    // output_dir is already resolved from CLI; override config
+    settings.output_dir = Some(output_path.clone());
+
+    tracing::info!("Loaded {} profile(s)", settings.profiles.len());
+    if let Some(ref input_dir) = settings.input_dir {
+        tracing::info!("Input directory: {}", input_dir.display());
+    }
+
+    // Background update check (skip for MCP mode -- stdio must stay clean)
+    if !matches!(cli.command, Some(Commands::Mcp) | None) {
+        tokio::spawn(update::check_for_update_bg());
+    }
 
     match cli.command.unwrap_or(Commands::Mcp) {
         Commands::Mcp => {
             tracing::info!("Starting nosce MCP server (stdio), output_dir={output_dir}");
-            let server = server::NosceServer::new(output_path, profiles);
+            let server = server::NosceServer::new(
+                output_path,
+                settings.input_dir.clone(),
+                settings.github_owner.clone(),
+                settings.doc_categories.clone(),
+                settings.timezone.clone(),
+                settings.profiles.clone(),
+            );
             let service = server.serve(stdio()).await?;
             service.waiting().await?;
         }
@@ -174,9 +222,9 @@ async fn async_main(cli: Cli) -> Result<()> {
             eprintln!();
 
             tracing::info!("Starting nosce web frontend on {host}:{port}, output_dir={output_dir}");
-            web::start_server(output_path, &host, port, &base_path, profiles).await?;
+            web::start_server(output_path, &host, port, &base_path, settings.profiles).await?;
         }
-        Commands::Stop => unreachable!(),
+        Commands::Stop | Commands::Update { .. } => unreachable!(),
     }
 
     Ok(())

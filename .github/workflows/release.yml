@@ -1,9 +1,17 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_call:
+    inputs:
+      tag:
+        description: "Tag to release"
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g., v0.1.0)"
+        required: true
 
 permissions:
   contents: write
@@ -36,6 +44,10 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
       - name: Install cross-compilation tools (Linux aarch64)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
@@ -50,6 +62,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Build frontend
         working-directory: frontend
@@ -66,14 +80,7 @@ jobs:
         id: archive
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME}"
-          case "${{ matrix.target }}" in
-            x86_64-apple-darwin)          ARCH="x86_64";  PLATFORM="darwin" ;;
-            aarch64-apple-darwin)         ARCH="aarch64"; PLATFORM="darwin" ;;
-            x86_64-unknown-linux-musl)    ARCH="x86_64";  PLATFORM="linux" ;;
-            aarch64-unknown-linux-gnu)    ARCH="aarch64"; PLATFORM="linux" ;;
-          esac
-          NAME="nosce-${VERSION}-${ARCH}-${PLATFORM}"
+          NAME="nosce-${{ inputs.tag }}-${{ matrix.target }}"
           echo "name=${NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Package binary
@@ -92,8 +99,8 @@ jobs:
             ${{ steps.archive.outputs.name }}.tar.gz
             ${{ steps.archive.outputs.name }}.tar.gz.sha256
 
-  release:
-    name: Create Release
+  upload:
+    name: Upload release assets
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -113,11 +120,36 @@ jobs:
         working-directory: release
         run: cat *.sha256 > checksums.txt
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: |
-            release/*.tar.gz
-            release/*.sha256
-            release/checksums.txt
+      - name: Generate latest.json manifest
+        run: |
+          TAG="${{ inputs.tag }}"
+          VERSION="${TAG#v}"
+          COMMIT="${{ github.sha }}"
+          DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          FILES="{}"
+          for f in release/*.tar.gz; do
+            BASENAME="$(basename "$f")"
+            SHA256="$(sha256sum "$f" | awk '{print $1}')"
+            SIZE="$(stat --printf='%s' "$f" 2>/dev/null || stat -f '%z' "$f")"
+            TARGET="$(echo "$BASENAME" | sed "s/nosce-${TAG}-//" | sed 's/\.tar\.gz//')"
+            FILES=$(echo "$FILES" | jq --arg t "$TARGET" --arg n "$BASENAME" --arg s "$SHA256" --argjson sz "$SIZE" \
+              '. + {($t): {name: $n, sha256: $s, size: $sz}}')
+          done
+
+          jq -n --arg v "$VERSION" --arg c "$COMMIT" --arg d "$DATE" --argjson f "$FILES" \
+            '{version: $v, commit: $c, date: $d, files: $f}' > release/latest.json
+
+      - name: Upload assets to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${{ inputs.tag }}" >/dev/null 2>&1 || \
+            gh release create "${{ inputs.tag }}" --title "${{ inputs.tag }}" --generate-notes
+
+          gh release upload "${{ inputs.tag }}" \
+            release/*.tar.gz \
+            release/*.sha256 \
+            release/checksums.txt \
+            release/latest.json \
+            --clobber

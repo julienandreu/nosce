@@ -1,113 +1,126 @@
 #!/bin/sh
-# install.sh — Download and install the nosce binary.
+# nosce installer - https://github.com/julienandreu/nosce
 # Usage: curl -fsSL https://raw.githubusercontent.com/julienandreu/nosce/main/install.sh | sh
-set -eu
+set -e
 
 REPO="julienandreu/nosce"
-BINARY="nosce"
+BINARY_NAME="nosce"
 INSTALL_DIR="${NOSCE_INSTALL_DIR:-$HOME/.local/bin}"
 
-# -- Colors (disabled if not a terminal) --------------------------------------
-if [ -t 1 ]; then
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    YELLOW='\033[0;33m'
-    CYAN='\033[0;36m'
-    BOLD='\033[1m'
-    RESET='\033[0m'
-else
-    RED='' GREEN='' YELLOW='' CYAN='' BOLD='' RESET=''
-fi
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
 
-info()  { printf "%b[info]%b  %s\n" "$CYAN"  "$RESET" "$1"; }
-ok()    { printf "%b[ok]%b    %s\n" "$GREEN" "$RESET" "$1"; }
-warn()  { printf "%b[warn]%b  %s\n" "$YELLOW" "$RESET" "$1"; }
-error() { printf "%b[error]%b %s\n" "$RED"   "$RESET" "$1"; exit 1; }
+info()  { printf "${GREEN}[INFO]${NC} %s\n" "$1"; }
+warn()  { printf "${YELLOW}[WARN]${NC} %s\n" "$1"; }
+error() { printf "${RED}[ERROR]${NC} %s\n" "$1"; exit 1; }
 
-# -- Detect OS and architecture -----------------------------------------------
-detect_platform() {
-    OS="$(uname -s)"
-    ARCH="$(uname -m)"
-
-    case "$OS" in
+detect_os() {
+    case "$(uname -s)" in
         Linux*)  OS="linux" ;;
         Darwin*) OS="darwin" ;;
-        *)       error "Unsupported OS: $OS" ;;
-    esac
-
-    case "$ARCH" in
-        x86_64|amd64)   ARCH="x86_64" ;;
-        aarch64|arm64)  ARCH="aarch64" ;;
-        *)              error "Unsupported architecture: $ARCH" ;;
+        *)       error "Unsupported operating system: $(uname -s)" ;;
     esac
 }
 
-# -- Resolve latest release tag -----------------------------------------------
-get_latest_version() {
-    if command -v curl >/dev/null 2>&1; then
-        VERSION="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name"' | sed 's/.*"tag_name": *"//;s/".*//')"
-    elif command -v wget >/dev/null 2>&1; then
-        VERSION="$(wget -qO- "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name"' | sed 's/.*"tag_name": *"//;s/".*//')"
-    else
-        error "Neither curl nor wget found. Install one and retry."
-    fi
-
-    [ -z "$VERSION" ] && error "Could not determine latest release version."
+detect_arch() {
+    case "$(uname -m)" in
+        x86_64|amd64)  ARCH="x86_64" ;;
+        arm64|aarch64) ARCH="aarch64" ;;
+        *)             error "Unsupported architecture: $(uname -m)" ;;
+    esac
 }
 
-# -- Download and install ------------------------------------------------------
-install() {
-    ARCHIVE="${BINARY}-${VERSION}-${ARCH}-${OS}.tar.gz"
-    URL="https://github.com/$REPO/releases/download/$VERSION/$ARCHIVE"
-
-    info "Downloading $BINARY $VERSION for $OS/$ARCH..."
-
-    TMPDIR="$(mktemp -d)"
-    trap 'rm -rf "$TMPDIR"' EXIT
-
-    if command -v curl >/dev/null 2>&1; then
-        curl -fsSL "$URL" -o "$TMPDIR/$ARCHIVE" || error "Download failed. Check that release $VERSION has a binary for $OS/$ARCH."
-    else
-        wget -qO "$TMPDIR/$ARCHIVE" "$URL" || error "Download failed. Check that release $VERSION has a binary for $OS/$ARCH."
-    fi
-
-    tar -xzf "$TMPDIR/$ARCHIVE" -C "$TMPDIR"
-
-    mkdir -p "$INSTALL_DIR"
-    mv "$TMPDIR/$BINARY" "$INSTALL_DIR/$BINARY"
-    chmod +x "$INSTALL_DIR/$BINARY"
-
-    ok "Installed $BINARY to $INSTALL_DIR/$BINARY"
-}
-
-# -- Post-install checks ------------------------------------------------------
-post_install() {
-    case ":$PATH:" in
-        *":$INSTALL_DIR:"*) ;;
-        *)
-            warn "$INSTALL_DIR is not in your PATH."
-            printf "\n  Add it to your shell profile:\n\n"
-            printf "    %bexport PATH=\"%s:\$PATH\"%b\n\n" "$BOLD" "$INSTALL_DIR" "$RESET"
+get_target() {
+    case "$OS" in
+        linux)
+            case "$ARCH" in
+                x86_64)  TARGET="x86_64-unknown-linux-musl" ;;
+                aarch64) TARGET="aarch64-unknown-linux-gnu" ;;
+            esac
+            ;;
+        darwin)
+            TARGET="${ARCH}-apple-darwin"
             ;;
     esac
+}
 
-    if command -v "$BINARY" >/dev/null 2>&1; then
-        ok "$("$BINARY" --version)"
+fetch_manifest() {
+    MANIFEST_URL="https://github.com/${REPO}/releases/latest/download/latest.json"
+    info "Fetching release manifest..."
+
+    MANIFEST="$(curl -fsSL "$MANIFEST_URL")" || error "Failed to fetch latest.json"
+
+    VERSION="$(echo "$MANIFEST" | grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+    [ -z "$VERSION" ] && error "Failed to parse version from manifest"
+
+    ASSET_NAME="$(echo "$MANIFEST" | grep -A3 "\"$TARGET\"" | grep '"name"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+    [ -z "$ASSET_NAME" ] && error "No asset found for target: $TARGET"
+
+    EXPECTED_SHA256="$(echo "$MANIFEST" | grep -A3 "\"$TARGET\"" | grep '"sha256"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+}
+
+install() {
+    info "Detected: $OS $ARCH"
+    info "Target:   $TARGET"
+    info "Version:  $VERSION"
+
+    DOWNLOAD_URL="https://github.com/${REPO}/releases/latest/download/${ASSET_NAME}"
+    TEMP_DIR="$(mktemp -d)"
+    ARCHIVE="${TEMP_DIR}/${BINARY_NAME}.tar.gz"
+
+    info "Downloading ${ASSET_NAME}..."
+    curl -fsSL "$DOWNLOAD_URL" -o "$ARCHIVE" || error "Failed to download binary"
+
+    if [ -n "$EXPECTED_SHA256" ]; then
+        info "Verifying checksum..."
+        if command -v sha256sum >/dev/null 2>&1; then
+            ACTUAL_SHA256="$(sha256sum "$ARCHIVE" | awk '{print $1}')"
+        elif command -v shasum >/dev/null 2>&1; then
+            ACTUAL_SHA256="$(shasum -a 256 "$ARCHIVE" | awk '{print $1}')"
+        else
+            warn "No sha256 tool found, skipping checksum verification"
+            ACTUAL_SHA256="$EXPECTED_SHA256"
+        fi
+
+        if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
+            rm -rf "$TEMP_DIR"
+            error "Checksum mismatch: expected $EXPECTED_SHA256, got $ACTUAL_SHA256"
+        fi
+    fi
+
+    info "Extracting..."
+    tar -xzf "$ARCHIVE" -C "$TEMP_DIR"
+
+    mkdir -p "$INSTALL_DIR"
+    mv "${TEMP_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/"
+    chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
+
+    rm -rf "$TEMP_DIR"
+    info "Installed ${BINARY_NAME} to ${INSTALL_DIR}/${BINARY_NAME}"
+}
+
+verify() {
+    if command -v "$BINARY_NAME" >/dev/null 2>&1; then
+        info "Verification: $("$BINARY_NAME" --version)"
     else
-        warn "Run ${BOLD}export PATH=\"$INSTALL_DIR:\$PATH\"${RESET} then ${BOLD}nosce --version${RESET} to verify."
+        warn "Binary installed but not in PATH. Add to your shell profile:"
+        warn "  export PATH=\"\$HOME/.local/bin:\$PATH\""
     fi
 }
 
-# -- Main ----------------------------------------------------------------------
 main() {
-    printf "\n%b%s installer%b\n\n" "$BOLD" "$BINARY" "$RESET"
-
-    detect_platform
-    get_latest_version
+    info "Installing ${BINARY_NAME}..."
+    detect_os
+    detect_arch
+    get_target
+    fetch_manifest
     install
-    post_install
-
-    printf "\n%bDone!%b Run %b%s --help%b to get started.\n\n" "$GREEN" "$RESET" "$BOLD" "$BINARY" "$RESET"
+    verify
+    echo ""
+    info "Installation complete! Run '${BINARY_NAME} --help' to get started."
+    info "To update later, run: ${BINARY_NAME} update"
 }
 
 main
