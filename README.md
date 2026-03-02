@@ -66,14 +66,14 @@ This gets you from zero to a generated report in 5 minutes.
 git clone https://github.com/julienandreu/nosce.git
 cd nosce
 
-# 2. Build the Rust server
-cargo build --release
-
-# 3. Build the frontend
+# 2. Build the frontend (must happen before cargo build — assets are embedded in the binary)
 cd frontend
 npm install
 npm run build
 cd ..
+
+# 3. Build the Rust server (embeds frontend assets via rust-embed)
+cargo build --release
 
 # 4. Create the output directory
 mkdir -p ~/.nosce/output
@@ -503,10 +503,12 @@ Vite proxies `/api/*` requests to the Rust server on port 3000. Open http://loca
 
 ```bash
 cd frontend
-npm run build
+npm run build        # Outputs to mcp-server/static/
+cd ..
+cargo build --release  # Embeds the frontend into the binary
 ```
 
-This outputs to `mcp-server/static/`. The Rust server serves these files automatically when you run `nosce serve`.
+The frontend is embedded into the `nosce` binary at compile time using `rust-embed`. After any frontend change, you must re-run `cargo build` for the new assets to take effect. This makes the binary fully self-contained — no external `static/` directory is needed at runtime.
 
 ### Tech stack
 
@@ -532,7 +534,7 @@ nosce/
 │       ├── main.rs               # CLI (clap): mcp | serve | stop subcommands
 │       ├── config.rs             # Profile definitions + nosce.yml loader
 │       ├── server.rs             # MCP tools + resources (rmcp)
-│       ├── web.rs                # HTTP API + static files (axum)
+│       ├── web.rs                # HTTP API + embedded static files (axum, rust-embed)
 │       └── fs_ops.rs             # Non-blocking filesystem operations
 │
 ├── frontend/                      # Preact SPA
@@ -605,15 +607,7 @@ After running `/sync` and `/docs`, your output directory looks like:
 
 ## Building from Source
 
-### Rust server
-
-```bash
-cargo build --release
-```
-
-Binary: `target/release/nosce`
-
-### Frontend
+### Frontend (build first)
 
 ```bash
 cd frontend
@@ -624,6 +618,16 @@ npm run typecheck   # TypeScript check
 npm run lint        # ESLint
 npm run format      # Prettier check
 ```
+
+### Rust server
+
+The frontend must be built before compiling the Rust binary — `rust-embed` embeds everything in `mcp-server/static/` into the binary at compile time.
+
+```bash
+cargo build --release
+```
+
+Binary: `target/release/nosce` (self-contained, includes frontend assets)
 
 ## Troubleshooting
 
@@ -657,12 +661,14 @@ The skill works fine without `gh` — you just won't see PR info in reports.
 
 ### Web UI shows "Frontend not built"
 
-Build the frontend first:
+The frontend is embedded into the binary at compile time. Build the frontend and then recompile:
 
 ```bash
 cd frontend
 npm install
 npm run build
+cd ..
+cargo build --release
 ```
 
 Then restart the server.

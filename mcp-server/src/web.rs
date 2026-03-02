@@ -16,12 +16,17 @@ use serde::{Deserialize, Serialize};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
+use rust_embed::Embed;
+
 use crate::config::ProfileDef;
 use crate::fs_ops;
 
+#[derive(Embed)]
+#[folder = "static/"]
+struct StaticAssets;
+
 struct AppState {
     output_dir: PathBuf,
-    static_dir: Option<PathBuf>,
     base_path: String,
     profiles: Vec<ProfileDef>,
     spinner: MultiSpinnerHandle,
@@ -34,12 +39,10 @@ pub async fn start_server(
     base_path: &str,
     profiles: Vec<ProfileDef>,
 ) -> Result<()> {
-    let static_dir = resolve_static_dir();
     let spinner = MultiSpinner::new().start();
 
     let state = Arc::new(AppState {
         output_dir,
-        static_dir,
         base_path: base_path.to_owned(),
         profiles,
         spinner,
@@ -480,49 +483,55 @@ async fn serve_static(
     State(state): State<Arc<AppState>>,
     req: axum::http::Request<axum::body::Body>,
 ) -> Response {
-    let Some(static_dir) = &state.static_dir else {
-        return (
-            StatusCode::NOT_FOUND,
-            "Frontend not built. Run: cd frontend && npm run build",
-        )
-            .into_response();
-    };
-
     let req_path = req.uri().path().trim_start_matches('/');
 
-    // Resolve the file path, then validate it stays within static_dir
-    let (file_path, is_index) = if req_path.is_empty() {
-        (static_dir.join("index.html"), true)
+    // Look up the requested path in embedded assets, falling back to index.html for SPA routing
+    let (data, file_path, is_index) = if req_path.is_empty() {
+        match StaticAssets::get("index.html") {
+            Some(asset) => (asset.data, "index.html", true),
+            None => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    "Frontend not built. Run: cd frontend && npm run build",
+                )
+                    .into_response();
+            }
+        }
     } else {
-        let candidate = static_dir.join(req_path);
-        // Canonicalize to prevent path traversal (e.g., "../../etc/passwd")
-        match safe_resolve(static_dir, &candidate).await {
-            Some(p) if p.is_file() => (p, false),
-            _ => (static_dir.join("index.html"), true), // SPA fallback
+        match StaticAssets::get(req_path) {
+            Some(asset) => (asset.data, req_path, false),
+            None => {
+                // SPA fallback: serve index.html for unmatched routes
+                match StaticAssets::get("index.html") {
+                    Some(asset) => (asset.data, "index.html", true),
+                    None => {
+                        return (
+                            StatusCode::NOT_FOUND,
+                            "Frontend not built. Run: cd frontend && npm run build",
+                        )
+                            .into_response();
+                    }
+                }
+            }
         }
     };
 
-    match fs_ops::read_file_bytes(&file_path).await {
-        Ok(bytes) => {
-            let mime = mime_from_extension(&file_path);
+    let mime = mime_from_extension(Path::new(file_path));
 
-            // Inject base path into index.html so the frontend knows where API lives
-            if is_index && !state.base_path.is_empty() {
-                let html = String::from_utf8_lossy(&bytes);
-                let injected = html.replacen(
-                    "<head>",
-                    &format!(
-                        "<head><script>window.__NOSCE_BASE__=\"{}\"</script>",
-                        state.base_path
-                    ),
-                    1,
-                );
-                ([(header::CONTENT_TYPE, mime)], injected.into_bytes()).into_response()
-            } else {
-                ([(header::CONTENT_TYPE, mime)], bytes).into_response()
-            }
-        }
-        Err(_) => (StatusCode::NOT_FOUND, "Not found").into_response(),
+    // Inject base path into index.html so the frontend knows where API lives
+    if is_index && !state.base_path.is_empty() {
+        let html = String::from_utf8_lossy(&data);
+        let injected = html.replacen(
+            "<head>",
+            &format!(
+                "<head><script>window.__NOSCE_BASE__=\"{}\"</script>",
+                state.base_path
+            ),
+            1,
+        );
+        ([(header::CONTENT_TYPE, mime)], injected.into_bytes()).into_response()
+    } else {
+        ([(header::CONTENT_TYPE, mime)], data.into_owned()).into_response()
     }
 }
 
@@ -690,21 +699,6 @@ async fn safe_resolve(root: &Path, candidate: &Path) -> Option<PathBuf> {
     .await
     .ok()
     .flatten()
-}
-
-/// Look for the built frontend static files in common locations.
-fn resolve_static_dir() -> Option<PathBuf> {
-    // Relative to the binary
-    let near_exe = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.join("../static")))
-        .filter(|p| p.is_dir());
-
-    near_exe.or_else(|| {
-        // Relative to cwd
-        let candidates = ["mcp-server/static", "static"];
-        candidates.iter().map(PathBuf::from).find(|p| p.is_dir())
-    })
 }
 
 /// Map media file extension to Content-Type header value.
