@@ -6,7 +6,7 @@ If your platform is split across many git submodules, keeping track of what chan
 
 Nosce fixes this. You point it at a repository that contains git submodules, and Claude analyzes every one of them: commits, merged PRs, code structure, database schemas, API contracts. It produces:
 
-- **Daily reports** — not just commit lists, but grouped-by-theme summaries that explain *what changed and why it matters*, with embedded screenshots and videos from PRs.
+- **Daily reports** — not just commit lists, but grouped-by-theme summaries that explain _what changed and why it matters_, with embedded screenshots and videos from PRs.
 - **Role-specific summaries** — the same changes, rewritten for engineers (breaking changes, deployment risks), product managers (feature progress, blockers), and sales (customer-facing improvements, demo-worthy features).
 - **Architecture documentation** — service topology diagrams, API contracts, database schemas, and dependency graphs, kept up to date automatically.
 
@@ -15,6 +15,7 @@ Results are served through a **web UI** for humans and an **MCP server** for oth
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
+- [Installation](#installation)
 - [Quick Start](#quick-start)
 - [How It Works](#how-it-works)
 - [Configuration](#configuration)
@@ -29,15 +30,13 @@ Results are served through a **web UI** for humans and an **MCP server** for oth
 
 ## Prerequisites
 
-You need these installed on your machine:
+| Tool              | What for                            | Install                                |
+| ----------------- | ----------------------------------- | -------------------------------------- |
+| **Claude Code**   | Runs the `/sync` and `/docs` skills | See below                              |
+| **Git**           | Submodule operations                | Already on your machine                |
+| **gh** (optional) | Fetches merged PR data from GitHub  | `brew install gh` then `gh auth login` |
 
-| Tool              | What for                            | Install                                                           |
-| ----------------- | ----------------------------------- | ----------------------------------------------------------------- |
-| **Claude Code**   | Runs the `/sync` and `/docs` skills | See below                                                         |
-| **Rust**          | Builds the MCP server + web server  | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
-| **Node.js 18+**   | Builds the frontend                 | `brew install node` or [nodejs.org](https://nodejs.org)           |
-| **Git**           | Submodule operations                | Already on your machine                                           |
-| **gh** (optional) | Fetches merged PR data from GitHub  | `brew install gh` then `gh auth login`                            |
+If you're [building from source](#building-from-source), you also need **Rust** (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`) and **Node.js 18+** (`brew install node` or [nodejs.org](https://nodejs.org)).
 
 ### Installing Claude Code
 
@@ -57,28 +56,77 @@ brew install --cask claude-code
 
 Then start it in any project with `claude`. You'll be prompted to log in on first use. See [code.claude.com/docs](https://code.claude.com/docs/en/overview) for other platforms (Windows, VS Code, JetBrains, Desktop app).
 
+## Installation
+
+### Install script (recommended)
+
+The install script downloads the latest pre-built binary for your platform, verifies the checksum, and places it in `~/.local/bin`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/julienandreu/nosce/main/install.sh | sh
+```
+
+Make sure `~/.local/bin` is in your `PATH`. If it isn't, add this to your shell profile (`~/.zshrc`, `~/.bashrc`, etc.):
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+To install to a different directory:
+
+```bash
+NOSCE_INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/julienandreu/nosce/main/install.sh | sh
+```
+
+### GitHub Releases
+
+Download a pre-built binary directly from the [releases page](https://github.com/julienandreu/nosce/releases/latest). Binaries are available for:
+
+| Platform             | Target                          |
+| -------------------- | ------------------------------- |
+| macOS (Apple Silicon) | `aarch64-apple-darwin`         |
+| macOS (Intel)         | `x86_64-apple-darwin`          |
+| Linux (x86_64)        | `x86_64-unknown-linux-musl`    |
+| Linux (aarch64)       | `aarch64-unknown-linux-gnu`    |
+
+Download the `.tar.gz` for your platform, then:
+
+```bash
+tar xzf nosce-*.tar.gz
+sudo mv nosce /usr/local/bin/
+```
+
+### Docker
+
+Build and run from the included Dockerfile:
+
+```bash
+docker build -t nosce .
+docker run -v ~/.nosce/output:/data -p 3000:3000 nosce serve
+```
+
+The container exposes port 3000 and persists data to `/data`. Mount your output directory to keep reports across restarts.
+
+### Build from source
+
+If you prefer to build from source, see [Building from Source](#building-from-source).
+
 ## Quick Start
 
 This gets you from zero to a generated report in 5 minutes.
 
 ```bash
-# 1. Clone nosce
+# 1. Install nosce
+curl -fsSL https://raw.githubusercontent.com/julienandreu/nosce/main/install.sh | sh
+
+# 2. Create the output directory
+mkdir -p ~/.nosce/output
+
+# 3. Clone the repo (needed for Claude Code skills)
 git clone https://github.com/julienandreu/nosce.git
 cd nosce
 
-# 2. Build the frontend (must happen before cargo build — assets are embedded in the binary)
-cd frontend
-npm install
-npm run build
-cd ..
-
-# 3. Build the Rust server (embeds frontend assets via rust-embed)
-cargo build --release
-
-# 4. Create the output directory
-mkdir -p ~/.nosce/output
-
-# 5. Open Claude Code in this repo
+# 4. Open Claude Code in this repo
 claude
 ```
 
@@ -176,17 +224,46 @@ profiles:
     label: Engineer
     icon: wrench
     description: "Technical implementation: code changes, diffs, breaking changes, architecture, testing, deployment risks"
-    focus: [commit_details, code_diffs, breaking_changes, tech_debt, architectural_impact, test_coverage_impact, regression_potential, deployment_safety]
+    focus:
+      [
+        commit_details,
+        code_diffs,
+        breaking_changes,
+        tech_debt,
+        architectural_impact,
+        test_coverage_impact,
+        regression_potential,
+        deployment_safety,
+      ]
   - id: product
     label: Product
     icon: lightbulb
     description: "Delivery orchestration: feature progress, dependencies, velocity, risk assessment, roadmap alignment"
-    focus: [feature_progress, delivery_status, blockers, cross_team_dependencies, risk_assessment, sprint_health, roadmap_alignment, feature_completeness]
+    focus:
+      [
+        feature_progress,
+        delivery_status,
+        blockers,
+        cross_team_dependencies,
+        risk_assessment,
+        sprint_health,
+        roadmap_alignment,
+        feature_completeness,
+      ]
   - id: sales
     label: Sales
     icon: megaphone
     description: "Customer-facing changes: new features, bug fixes, competitive advantages, answers for sales leads"
-    focus: [new_features, customer_benefits, competitive_advantages, release_highlights, user_facing_bugs, ux_improvements, demo_worthy_changes]
+    focus:
+      [
+        new_features,
+        customer_benefits,
+        competitive_advantages,
+        release_highlights,
+        user_facing_bugs,
+        ux_improvements,
+        demo_worthy_changes,
+      ]
 ```
 
 You can skip editing this file entirely and pass paths as arguments:
@@ -267,8 +344,8 @@ change for clients that relied on cookie-based sessions.
 
 ### Screenshots & Videos
 
-| | |
-|---|---|
+|                                                                     |                                                                                                                      |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | ![JWT flow diagram](/api/media/2026-02-28/auth-service-pr142-1.png) | [**#142**](https://github.com/myorg/auth-service/pull/142) — JWT authentication ([@alice](https://github.com/alice)) |
 
 ---
@@ -284,11 +361,11 @@ All references in reports are clickable: PR numbers link to GitHub PRs, commit S
 
 After generating the base report, `/sync` creates a tailored summary for each profile defined in `nosce.yml`. Each summary re-analyzes the same changes through the lens of a specific role:
 
-| Profile | What they see |
-|---------|---------------|
-| **Engineer** | Code changes, diffs, breaking changes, architectural impact, test coverage, deployment risks |
-| **Product** | Feature progress, delivery status, blockers, cross-team dependencies, sprint health, roadmap alignment |
-| **Sales** | New customer-facing features, bug fixes, competitive advantages, demo-worthy changes, UX improvements |
+| Profile      | What they see                                                                                          |
+| ------------ | ------------------------------------------------------------------------------------------------------ |
+| **Engineer** | Code changes, diffs, breaking changes, architectural impact, test coverage, deployment risks           |
+| **Product**  | Feature progress, delivery status, blockers, cross-team dependencies, sprint health, roadmap alignment |
+| **Sales**    | New customer-facing features, bug fixes, competitive advantages, demo-worthy changes, UX improvements  |
 
 The summaries are stored alongside the base report:
 
@@ -460,15 +537,15 @@ claude mcp add --scope user --transport stdio nosce \
 
 Once configured, Claude has access to these tools in any session:
 
-| Tool                | What it does                                                                                         |
-| ------------------- | ---------------------------------------------------------------------------------------------------- |
-| `get_daily_report`  | Get a report by date, or the latest one. Optionally pass a `profile` for a role-specific view.       |
-| `list_reports`      | List all available report dates                                                                      |
-| `list_profiles`     | List all configured profiles with their descriptions and focus areas                                 |
-| `get_doc`           | Get a doc by category (overview, architecture, apis, databases, dependencies)                        |
-| `get_submodule_doc` | Get detailed docs for a specific submodule                                                           |
-| `search_docs`       | Full-text search across all reports and docs                                                         |
-| `get_changelog`     | Get a submodule's changes across a date range                                                        |
+| Tool                | What it does                                                                                   |
+| ------------------- | ---------------------------------------------------------------------------------------------- |
+| `get_daily_report`  | Get a report by date, or the latest one. Optionally pass a `profile` for a role-specific view. |
+| `list_reports`      | List all available report dates                                                                |
+| `list_profiles`     | List all configured profiles with their descriptions and focus areas                           |
+| `get_doc`           | Get a doc by category (overview, architecture, apis, databases, dependencies)                  |
+| `get_submodule_doc` | Get detailed docs for a specific submodule                                                     |
+| `search_docs`       | Full-text search across all reports and docs                                                   |
+| `get_changelog`     | Get a submodule's changes across a date range                                                  |
 
 ### Example prompts
 
