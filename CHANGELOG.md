@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/julienandreu/nosce/compare/nosce-v1.1.0...nosce-v1.1.1) (2026-03-03)
+
+
+### Bug Fixes
+
+* use mutable latest release for install script manifest ([#6](https://github.com/julienandreu/nosce/issues/6)) ([8bf8d3e](https://github.com/julienandreu/nosce/commit/8bf8d3ed8b7c456b690569046b30f115034c83dc))
+
 ## [1.1.0](https://github.com/julienandreu/nosce/compare/nosce-v1.0.1...nosce-v1.1.0) (2026-03-03)
 
 
