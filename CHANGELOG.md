@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/julienandreu/nosce/compare/nosce-v1.0.0...nosce-v1.0.1) (2026-03-03)
+
+
+### Documentation
+
+* add installation section to README ([#2](https://github.com/julienandreu/nosce/issues/2)) ([cc5dbad](https://github.com/julienandreu/nosce/commit/cc5dbad7a2a7c9b6c437f7925daf56dd20bf9a73))
+
 ## 1.0.0 (2026-03-02)
 
 
