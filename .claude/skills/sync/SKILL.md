@@ -12,17 +12,18 @@ You are Claude, acting as the nosce sync engine. You collect raw data from git r
 ## Arguments
 
 Parse `$ARGUMENTS` for:
-- **input-path** (positional): Path to the root git repository containing submodules. Falls back to the `input` field in `nosce.yml`.
-- **--output path**: Where to write reports and state. Falls back to the `output` field in `nosce.yml`.
+
+- **input-path** (positional): Path to the root git repository containing submodules. Falls back to the `input` field in `nosce.config.yml`.
+- **--output path**: Where to write reports and state. Falls back to the `output` field in `nosce.config.yml`.
 - **--date YYYY-MM-DD**: Override the report date (default: today).
 
-If no input path is provided and `nosce.yml` has no input configured, ask the user for the path.
+If no input path is provided and `nosce.config.yml` has no input configured, ask the user for the path.
 
 ## Steps
 
 ### 1. Read Configuration
 
-Read `nosce.yml` from the nosce repo root to get defaults. Merge with any provided arguments.
+Read `nosce.config.yml` from the nosce repo root to get defaults. Merge with any provided arguments.
 Resolve the output directory path (expand `~` if needed). Ensure it exists (create with `mkdir -p` if not).
 
 ### 2. Load Previous State
@@ -71,21 +72,25 @@ This ensures submodules are always at the **tip of their main branch**, not pinn
 For each submodule, gather the raw materials you will analyze:
 
 **Commits** (if previous SHA exists in state):
+
 ```bash
 git -C <input-path>/<submodule-path> log --format='%H|%an|%ae|%aI|%s' <last_sha>..origin/<branch>
 ```
 
 If no previous SHA (first run), limit to last 24 hours:
+
 ```bash
 git -C <input-path>/<submodule-path> log --format='%H|%an|%ae|%aI|%s' --since="24 hours ago" origin/<branch>
 ```
 
 **Merged PRs** (extract GitHub owner/repo from URL):
+
 ```bash
 gh pr list -R <owner>/<repo> --state merged --json number,title,author,mergedAt,additions,deletions,headRefName,body --search "merged:>=<last-sync-date>" --limit 100
 ```
 
 **Diff stats** (to understand scope of changes):
+
 ```bash
 git -C <input-path>/<submodule-path> diff --stat <last_sha>..origin/<branch>
 ```
@@ -103,13 +108,16 @@ For each merged PR that has a `body` field, extract and download any screenshots
    - Skip badge images (URLs containing `shields.io`, `img.shields.io`, `badge`)
 
 2. **Download media** to `<output>/media/<date>/`:
+
    ```bash
    mkdir -p <output>/media/<date>
    curl -sL -o <output>/media/<date>/<repo>-pr<number>-<index>.<ext> "<url>"
    ```
+
    Filename format: `<repo>-pr<number>-<index>.<ext>` (e.g., `desktop-app-v2-pr72-1.png`)
 
 3. **Build manifest** at `<output>/media/<date>/manifest.json`:
+
    ```json
    {
      "date": "YYYY-MM-DD",
@@ -127,6 +135,7 @@ For each merged PR that has a `body` field, extract and download any screenshots
      ]
    }
    ```
+
    The `type` field is `"image"` for `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp` and `"video"` for `.mp4`, `.mov`, `.webm`.
 
 4. **Skip on failure** — If a URL 404s or download fails, log a warning and continue. Never block the sync on media failures.
@@ -179,8 +188,8 @@ This is where you, Claude, add value beyond raw data. Create `<output>/reports/Y
 
 ### Commits (N new)
 
-| SHA | Author | Message | Date |
-|-----|--------|---------|------|
+| SHA                                                                         | Author      | Message        | Date       |
+| --------------------------------------------------------------------------- | ----------- | -------------- | ---------- |
 | [`abc1234`](https://github.com/saris-ai/<submodule-name>/commit/<full-sha>) | Author Name | commit message | YYYY-MM-DD |
 
 ### Merged PRs (N)
@@ -203,14 +212,14 @@ For each matching media item, render a row in the table below. Use the item's `f
 
 **Images** — embed inline with `![alt](/api/media/<date>/<filename>)`:
 
-| | |
-|---|---|
+|                                            |                                                                                                                                           |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | ![<alt>](/api/media/YYYY-MM-DD/<filename>) | [**#<pr_number>**](https://github.com/saris-ai/<submodule-name>/pull/<pr_number>) — <pr_title> ([@<author>](https://github.com/<author>)) |
 
 **Videos** — link instead of embedding (markdown can't inline video):
 
-| | |
-|---|---|
+|                                                  |                                                                                                                                           |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | [Video: <alt>](/api/media/YYYY-MM-DD/<filename>) | [**#<pr_number>**](https://github.com/saris-ai/<submodule-name>/pull/<pr_number>) — <pr_title> ([@<author>](https://github.com/<author>)) |
 
 Group rows by PR number. Include ALL media items from the manifest for this repo — do not cherry-pick.
@@ -227,7 +236,7 @@ Group rows by PR number. Include ALL media items from the manifest for this repo
 
 After generating the base report, create focused summaries for each audience.
 
-Read the `profiles` section from `nosce.yml` in the nosce repo root. For each profile:
+Read the `profiles` section from `nosce.config.yml` in the nosce repo root. For each profile:
 
 1. Create directory `<output>/reports/YYYY-MM-DD/` if it doesn't exist (use `mkdir -p`)
 2. Re-read the base report you just wrote at `<output>/reports/YYYY-MM-DD.md`
@@ -261,17 +270,17 @@ Use the tone and detail level appropriate for the audience.>
 
 **Profile lens guidelines:**
 
-| Profile | Emphasis | Tone | Length |
-|---------|----------|------|--------|
-| `engineer` | Commit diffs, breaking changes, tech debt, architecture | Technical, detailed | Long |
-| `pm` | Feature progress, user stories, blockers, timeline | Business-oriented | Medium |
-| `head-of-engineering` | Velocity, cross-team deps, risk, staffing | Strategic-technical | Medium |
-| `cto` | 3-bullet executive summary, platform health, key risks | Executive, concise | Short (~10 lines) |
-| `product` | Feature completeness, roadmap alignment, user value | Product-oriented | Medium |
-| `sales` | Customer-facing features, competitive advantages, demos | Customer-facing, zero jargon | Short |
-| `customer-experience` | Bug fixes, UX changes, breaking user-facing changes | User-centric | Medium |
-| `technical-pm` | Delivery status, deps, integration risks, sprint health | Project management | Medium |
-| `qa` | Risk areas needing testing, regression, deploy safety | Testing-focused | Medium |
+| Profile               | Emphasis                                                | Tone                         | Length            |
+| --------------------- | ------------------------------------------------------- | ---------------------------- | ----------------- |
+| `engineer`            | Commit diffs, breaking changes, tech debt, architecture | Technical, detailed          | Long              |
+| `pm`                  | Feature progress, user stories, blockers, timeline      | Business-oriented            | Medium            |
+| `head-of-engineering` | Velocity, cross-team deps, risk, staffing               | Strategic-technical          | Medium            |
+| `cto`                 | 3-bullet executive summary, platform health, key risks  | Executive, concise           | Short (~10 lines) |
+| `product`             | Feature completeness, roadmap alignment, user value     | Product-oriented             | Medium            |
+| `sales`               | Customer-facing features, competitive advantages, demos | Customer-facing, zero jargon | Short             |
+| `customer-experience` | Bug fixes, UX changes, breaking user-facing changes     | User-centric                 | Medium            |
+| `technical-pm`        | Delivery status, deps, integration risks, sprint health | Project management           | Medium            |
+| `qa`                  | Risk areas needing testing, regression, deploy safety   | Testing-focused              | Medium            |
 
 **Media in profiles:** When the base report includes Screenshots & Videos sections, include relevant screenshots in profile summaries too — especially for `product`, `customer-experience`, `sales`, and `qa` profiles. Embed the same `/api/media/<date>/<filename>` images. For `cto` and `head-of-engineering`, omit screenshots to keep summaries concise.
 
@@ -284,6 +293,7 @@ Write the updated state to `<output>/state.json` with new SHAs and current times
 ### 8. Summary
 
 Print a concise summary to the user:
+
 - How many submodules were analyzed
 - How many had changes
 - Total commits and PRs found

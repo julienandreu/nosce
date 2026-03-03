@@ -2,7 +2,7 @@ target/
 node_modules/
 .git/
 .claude/
-mcp-server/target/
-mcp-server/static/
-frontend/node_modules/
+cli/target/
+cli/static/
+webui/node_modules/
 *.md

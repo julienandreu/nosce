@@ -191,7 +191,7 @@ flowchart TD
 
 ## Configuration
 
-Edit `nosce.yml` in the repo root:
+Edit `nosce.config.yml` in the repo root:
 
 ```yaml
 version: 1
@@ -359,7 +359,7 @@ All references in reports are clickable: PR numbers link to GitHub PRs, commit S
 
 ### Profile-specific summaries
 
-After generating the base report, `/sync` creates a tailored summary for each profile defined in `nosce.yml`. Each summary re-analyzes the same changes through the lens of a specific role:
+After generating the base report, `/sync` creates a tailored summary for each profile defined in `nosce.config.yml`. Each summary re-analyzes the same changes through the lens of a specific role:
 
 | Profile      | What they see                                                                                          |
 | ------------ | ------------------------------------------------------------------------------------------------------ |
@@ -533,6 +533,14 @@ claude mcp add --scope user --transport stdio nosce \
   -- --output-dir ~/.nosce/output
 ```
 
+If nosce is already in your `PATH` and you've set `NOSCE_OUTPUT_DIR` (e.g. via `nosce init`):
+
+```bash
+claude mcp add --scope user --transport stdio nosce \
+  $(which nosce) \
+  -- --output-dir $(NOSCE_OUTPUT_DIR)
+```
+
 ### Available tools
 
 Once configured, Claude has access to these tools in any session:
@@ -561,15 +569,15 @@ With the MCP server running, you can ask Claude in any project:
 
 ### Development
 
-To work on the frontend:
+To work on the web UI:
 
 ```bash
 # Terminal 1: Start the Rust web server (serves the API)
-cd mcp-server
+cd cli
 cargo run -- --output-dir ~/.nosce/output serve
 
 # Terminal 2: Start Vite dev server (hot reload)
-cd frontend
+cd webui
 npm install
 npm run dev
 ```
@@ -579,13 +587,13 @@ Vite proxies `/api/*` requests to the Rust server on port 3000. Open http://loca
 ### Production build
 
 ```bash
-cd frontend
-npm run build        # Outputs to mcp-server/static/
+cd webui
+npm run build        # Outputs to cli/static/
 cd ..
-cargo build --release  # Embeds the frontend into the binary
+cargo build --release  # Embeds the web UI into the binary
 ```
 
-The frontend is embedded into the `nosce` binary at compile time using `rust-embed`. After any frontend change, you must re-run `cargo build` for the new assets to take effect. This makes the binary fully self-contained — no external `static/` directory is needed at runtime.
+The web UI is embedded into the `nosce` binary at compile time using `rust-embed`. After any web UI change, you must re-run `cargo build` for the new assets to take effect. This makes the binary fully self-contained — no external `static/` directory is needed at runtime.
 
 ### Tech stack
 
@@ -603,18 +611,18 @@ nosce/
 │       ├── sync/SKILL.md         # /sync — daily changelog generation
 │       └── docs/SKILL.md         # /docs — architecture documentation
 ├── .mcp.json                      # MCP server config (for this repo)
-├── nosce.yml                      # Default configuration
+├── nosce.config.yml               # Default configuration
 │
-├── mcp-server/                    # Rust: MCP server + web server
+├── cli/                           # Rust: CLI + MCP server + web server
 │   ├── Cargo.toml
 │   └── src/
 │       ├── main.rs               # CLI (clap): mcp | serve | stop subcommands
-│       ├── config.rs             # Profile definitions + nosce.yml loader
+│       ├── config.rs             # Profile definitions + nosce.config.yml loader
 │       ├── server.rs             # MCP tools + resources (rmcp)
 │       ├── web.rs                # HTTP API + embedded static files (axum, rust-embed)
 │       └── fs_ops.rs             # Non-blocking filesystem operations
 │
-├── frontend/                      # Preact SPA
+├── webui/                         # Preact SPA
 │   ├── package.json
 │   ├── tsconfig.json             # Strict TypeScript
 │   ├── eslint.config.js          # Strict + stylistic ESLint
@@ -684,12 +692,12 @@ After running `/sync` and `/docs`, your output directory looks like:
 
 ## Building from Source
 
-### Frontend (build first)
+### Web UI (build first)
 
 ```bash
-cd frontend
+cd webui
 npm install
-npm run build       # Production build -> mcp-server/static/
+npm run build       # Production build -> cli/static/
 npm run dev         # Dev server with hot reload
 npm run typecheck   # TypeScript check
 npm run lint        # ESLint
@@ -698,13 +706,13 @@ npm run format      # Prettier check
 
 ### Rust server
 
-The frontend must be built before compiling the Rust binary — `rust-embed` embeds everything in `mcp-server/static/` into the binary at compile time.
+The web UI must be built before compiling the Rust binary — `rust-embed` embeds everything in `cli/static/` into the binary at compile time.
 
 ```bash
 cargo build --release
 ```
 
-Binary: `target/release/nosce` (self-contained, includes frontend assets)
+Binary: `target/release/nosce` (self-contained, includes web UI assets)
 
 ## Troubleshooting
 
@@ -721,7 +729,7 @@ mkdir -p ~/.nosce/output
 Either:
 
 - Pass it as an argument: `/sync /path/to/your/repo`
-- Or set it in `nosce.yml`:
+- Or set it in `nosce.config.yml`:
   ```yaml
   input: /path/to/your/repo
   ```
@@ -732,16 +740,16 @@ The `/sync` skill uses `gh` CLI to fetch merged PRs. If PRs are missing:
 
 1. Install `gh`: `brew install gh`
 2. Authenticate: `gh auth login`
-3. Set `github_owner` in `nosce.yml`
+3. Set `github_owner` in `nosce.config.yml`
 
 The skill works fine without `gh` — you just won't see PR info in reports.
 
 ### Web UI shows "Frontend not built"
 
-The frontend is embedded into the binary at compile time. Build the frontend and then recompile:
+The web UI is embedded into the binary at compile time. Build it and then recompile:
 
 ```bash
-cd frontend
+cd webui
 npm install
 npm run build
 cd ..
