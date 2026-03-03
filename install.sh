@@ -47,13 +47,16 @@ get_target() {
 }
 
 fetch_manifest() {
-    MANIFEST_URL="https://github.com/${REPO}/releases/latest/download/latest.json"
+    MANIFEST_URL="https://github.com/${REPO}/releases/download/latest/latest.json"
     info "Fetching release manifest..."
 
     MANIFEST="$(curl -fsSL "$MANIFEST_URL")" || error "Failed to fetch latest.json"
 
     VERSION="$(echo "$MANIFEST" | grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
     [ -z "$VERSION" ] && error "Failed to parse version from manifest"
+
+    TAG="$(echo "$MANIFEST" | grep -o '"tag"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+    [ -z "$TAG" ] && error "Failed to parse tag from manifest"
 
     ASSET_NAME="$(echo "$MANIFEST" | grep -A3 "\"$TARGET\"" | grep '"name"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
     [ -z "$ASSET_NAME" ] && error "No asset found for target: $TARGET"
@@ -66,7 +69,7 @@ install() {
     info "Target:   $TARGET"
     info "Version:  $VERSION"
 
-    DOWNLOAD_URL="https://github.com/${REPO}/releases/latest/download/${ASSET_NAME}"
+    DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET_NAME}"
     TEMP_DIR="$(mktemp -d)"
     ARCHIVE="${TEMP_DIR}/${BINARY_NAME}.tar.gz"
 
