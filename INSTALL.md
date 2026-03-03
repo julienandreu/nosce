@@ -18,10 +18,10 @@ NOSCE_INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/ju
 
 ### Prerequisites
 
-| Tool | Install |
-|------|---------|
-| Rust 1.70+ | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
-| Node.js 18+ | `brew install node` or [nodejs.org](https://nodejs.org) |
+| Tool        | Install                                                           |
+| ----------- | ----------------------------------------------------------------- |
+| Rust 1.70+  | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
+| Node.js 18+ | `brew install node` or [nodejs.org](https://nodejs.org)           |
 
 ### Build
 
@@ -32,8 +32,8 @@ cd nosce
 # Build the Rust binary
 cargo build --release
 
-# Build the frontend
-cd frontend
+# Build the web UI
+cd webui
 npm install
 npm run build
 cd ..
@@ -58,7 +58,7 @@ Create `~/.nosce/output` for the default output directory:
 mkdir -p ~/.nosce/output
 ```
 
-Copy and edit `nosce.yml` to configure profiles, input paths, and output paths. See the [README](README.md#configuration) for full details.
+Copy and edit `nosce.config.yml` to configure profiles, input paths, and output paths. See the [README](README.md#configuration) for full details.
 
 ## Verify Installation
 

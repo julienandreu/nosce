@@ -22,16 +22,16 @@ credentials.json
 
 # Rust
 /target/
-mcp-server/target/
-mcp-server/static/
+cli/target/
+cli/static/
 
 # Node
-frontend/node_modules/
-frontend/dist/
+webui/node_modules/
+webui/dist/
 
 # TypeScript
 *.tsbuildinfo
-frontend/.eslintcache
+webui/.eslintcache
 
 # SQLite
 *.db
@@ -40,3 +40,6 @@ frontend/.eslintcache
 
 # Claude
 .claude/plans/
+
+# Linter
+.eslintcache

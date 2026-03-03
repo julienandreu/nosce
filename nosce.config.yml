@@ -1,0 +1,104 @@
+version: 1
+
+# Paths (overridable via CLI flags or env vars)
+input: ~/.nosce/input
+output: ~/.nosce/output
+
+# GitHub owner for gh CLI (PR lookups)
+github_owner: nosce
+
+# Report settings
+reports:
+  timezone: America/Montreal
+
+# Docs settings
+docs:
+  categories:
+    - overview
+    - customer experience
+    - architecture
+    - apis
+    - databases
+    - dependencies
+
+# User profiles — each profile sees a tailored report summary
+profiles:
+  - id: engineer
+    label: Engineer
+    icon: wrench
+    description: |
+      Technical implementation: code changes, diffs, breaking changes, architecture, testing, deployment risks
+    focus:
+      - commit_details
+      - code_diffs
+      - breaking_changes
+      - tech_debt
+      - architectural_impact
+      - test_coverage_impact
+      - regression_potential
+      - deployment_safety
+  - id: fde
+    label: Forward Deployed Engineer
+    icon: robot
+    description: |
+      Forward-deployed perspective: customer-facing changes, deployment impact, API stability, integration risks, and demo readiness
+    focus:
+      - customer_impact
+      - api_changes
+      - integration_risks
+      - commit_details
+      - code_diffs
+      - breaking_changes
+      - regression_potential
+      - deployment_safety
+      - screenshots
+      - videos
+      - code_review
+      - code_review_comments
+  - id: product
+    label: Product
+    icon: lightbulb
+    description: |
+      Delivery orchestration: feature progress, dependencies, velocity, risk assessment, roadmap alignment
+    focus:
+      - feature_progress
+      - delivery_status
+      - blockers
+      - cross_team_dependencies
+      - risk_assessment
+      - sprint_health
+      - roadmap_alignment
+      - feature_completeness
+      - screenshots
+      - videos
+  - id: marketing
+    label: Marketing
+    icon: rocket
+    description: |
+      Marketing perspective: user-facing improvements, feature announcements, visual changes, and competitive positioning
+    focus:
+      - release_highlights
+      - new_features
+      - customer_benefits
+      - competitive_advantages
+      - user_facing_changes
+      - user_facing_bugs
+      - ux_improvements
+      - demo_worthy_changes
+      - screenshots
+      - videos
+  - id: sales
+    label: Sales
+    icon: megaphone
+    description: |
+      Customer-facing changes: new features, bug fixes, competitive advantages, answers for sales leads
+    focus:
+      - new_features
+      - customer_benefits
+      - competitive_advantages
+      - release_highlights
+      - user_facing_bugs
+      - ux_improvements
+      - demo_worthy_changes
+      - screenshots
+      - videos

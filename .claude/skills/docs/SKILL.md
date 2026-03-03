@@ -14,18 +14,19 @@ Your analysis goes beyond listing files — you understand how services connect,
 ## Arguments
 
 Parse `$ARGUMENTS` for:
-- **input-path** (positional): Path to the root git repository containing submodules. Falls back to the `input` field in `nosce.yml`.
-- **--output path**: Where to write documentation. Falls back to the `output` field in `nosce.yml`.
+
+- **input-path** (positional): Path to the root git repository containing submodules. Falls back to the `input` field in `nosce.config.yml`.
+- **--output path**: Where to write documentation. Falls back to the `output` field in `nosce.config.yml`.
 - **--full**: Force full regeneration, ignoring `last_updated` timestamps.
 - **submodule-name**: If provided after flags, only process this specific submodule.
 
-If no input path is provided and `nosce.yml` has no input configured, ask the user for the path.
+If no input path is provided and `nosce.config.yml` has no input configured, ask the user for the path.
 
 ## Steps
 
 ### 1. Read Configuration
 
-Read `nosce.yml` from the nosce repo root to get defaults. Merge with any provided arguments.
+Read `nosce.config.yml` from the nosce repo root to get defaults. Merge with any provided arguments.
 Resolve the output directory path. Ensure `<output>/docs/` and `<output>/docs/submodules/` exist.
 
 ### 2. Load Existing Documentation
@@ -68,21 +69,25 @@ This ensures documentation is always generated from the **tip of each submodule'
 For each submodule in scope, do a **thorough scan** of all architectural indicators. Use Glob to discover files, then Read all relevant ones — not just a sample.
 
 **Documentation files (read ALL of these):**
+
 - `README.md`, `AI_CONTEXT.md`, `ARCHITECTURE.md`, `CONTRIBUTING.md`, `CHANGELOG.md`
 - `docs/**/*.md`, `.cursor/rules/**/*.md`
 
 **API contracts (read ALL of these):**
+
 - `**/*.proto` (gRPC/Protobuf)
 - `**/openapi.{yml,yaml,json}`, `**/swagger.{yml,yaml,json}` (REST)
 - `**/graphql/**/*.graphql`, `**/schema.graphql` (GraphQL)
 
 **Database schemas (read ALL of these):**
+
 - `**/migrations/**/*.sql` (latest 5-10 to understand evolution)
 - `**/schema.{sql,prisma}`, `**/prisma/schema.prisma`
 - `**/models/**`, `**/entities/**` (ORM models — read all model files)
 - `**/alembic/**`, `**/migrations/env.py`
 
 **Source code (read key files for architecture understanding):**
+
 - `src/main.*`, `src/lib.*`, `src/index.*`, `src/app.*`, `cmd/**`, `app/**`
 - `**/routes/**`, `**/router.*`, `**/controllers/**`, `**/handlers/**`
 - `**/services/**`, `**/repositories/**` (business logic layer)
@@ -93,6 +98,7 @@ For each submodule in scope, do a **thorough scan** of all architectural indicat
 - `**/permissions.*`, `**/auth/**` (authorization)
 
 **Infrastructure & dependencies (read ALL of these):**
+
 - `Dockerfile`, `docker-compose.{yml,yaml}`, `compose.yml`
 - `Cargo.toml`, `package.json`, `go.mod`, `pyproject.toml`, `Gemfile`, `poetry.lock` (just deps section)
 - `tsconfig.json`, `ruff.toml`, `.pre-commit-config.yaml`
@@ -100,6 +106,7 @@ For each submodule in scope, do a **thorough scan** of all architectural indicat
 - `Makefile`, `scripts/**/*.sh`
 
 **Terraform / IaC (if present):**
+
 - `**/*.tf` (all Terraform files)
 - `**/*.tfvars` (variable definitions, not secrets)
 - `**/modules/**` (reusable infrastructure modules)
@@ -152,6 +159,7 @@ branch: "<branch>"
 ## APIs
 
 <If the submodule exposes APIs:
+
 - List endpoints with methods, paths, and purpose
 - Document request/response shapes from proto files or openapi specs
 - Note authentication requirements if visible>
@@ -159,6 +167,7 @@ branch: "<branch>"
 ## Database Schema
 
 <If the submodule has a database:
+
 - Key tables/collections and their purpose
 - Important relationships
 - Recent schema changes from migrations>
@@ -177,30 +186,35 @@ branch: "<branch>"
 After updating per-submodule docs, read ALL per-submodule docs from `<output>/docs/submodules/` and **build a holistic understanding** of the platform.
 
 **`<output>/docs/overview.md`** — Systems overview:
+
 - What the overall platform does (the big picture)
 - Each service's role in one sentence
 - How they compose into the full system
 - Key architectural decisions you can infer
 
 **`<output>/docs/architecture.md`** — Architecture diagrams:
+
 - Mermaid flowchart showing service topology and communication patterns
 - Mermaid sequence diagrams for key user-facing flows
 - Data flow overview: where data enters, how it's processed, where it's stored
 - Include a C4-style context diagram if the system is complex
 
 **`<output>/docs/apis.md`** — API contracts:
+
 - All public APIs across the platform, organized by domain
 - Internal APIs between services
 - Request/response shapes
 - Authentication and authorization patterns
 
 **`<output>/docs/databases.md`** — Database schemas:
+
 - All databases: type, owner service, purpose
 - Key tables/collections with descriptions
 - Cross-service data relationships
 - Data ownership boundaries
 
 **`<output>/docs/dependencies.md`** — Service dependency map:
+
 - Mermaid graph of service dependencies (who calls whom)
 - Shared libraries and internal packages
 - External service dependencies (third-party APIs, cloud services)
@@ -217,37 +231,42 @@ For submodules that contain a `packages/` directory (monorepo pattern), generate
 
 ### 10. Profile-Specific Doc Variants (MANDATORY)
 
-**Every documentation file MUST have a profile variant for every profile defined in `nosce.yml`.** This is not optional — each profile sees fundamentally different content tailored to their role.
+**Every documentation file MUST have a profile variant for every profile defined in `nosce.config.yml`.** This is not optional — each profile sees fundamentally different content tailored to their role.
 
 #### 10a. Read Profiles
 
-Read the `profiles` section from `nosce.yml`. For each profile, note its `id`, `label`, `description`, and `focus` array. These drive what content to include, what to emphasize, and what tone to use.
+Read the `profiles` section from `nosce.config.yml`. For each profile, note its `id`, `label`, `description`, and `focus` array. These drive what content to include, what to emphasize, and what tone to use.
 
 #### 10b. Generate Profile Variants for Cross-Cutting Docs
 
 For **every** category doc, create `<output>/docs/<category>/<profile_id>.md`. Use `mkdir -p` to create the directory first.
 
 **`overview/<profile_id>.md`** — Rewrite the systems overview through the profile's lens:
+
 - **Engineer**: Focus on technology choices, architectural trade-offs, performance characteristics, deployment topology, and how services interact technically
 - **Product**: Focus on what each service enables for customers, feature capabilities, integration surface, delivery status, and roadmap implications
 - **Sales**: Focus on customer-facing value, competitive differentiators, platform capabilities that answer prospect questions, and deployment flexibility
 
 **`architecture/<profile_id>.md`** — Rewrite architecture docs through the profile's lens:
+
 - **Engineer**: Deep-dive on service topology, data flows, failure modes, scaling characteristics, security boundaries, and deployment pipeline
 - **Product**: Simplified architecture showing how features flow through the system, integration touchpoints, and where customer-specific configuration happens
 - **Sales**: High-level platform architecture that demonstrates enterprise readiness — security, multi-tenancy, redundancy, compliance capabilities
 
 **`apis/<profile_id>.md`** — Rewrite API docs through the profile's lens:
+
 - **Engineer**: Full endpoint reference, request/response schemas, auth patterns, rate limits, error codes, and integration patterns
 - **Product**: API capabilities grouped by feature domain, what each API enables for customers, webhook/integration capabilities
 - **Sales**: Integration story — what systems the platform connects to, how easy onboarding is, what LOS/third-party systems are supported
 
 **`databases/<profile_id>.md`** — Rewrite database docs through the profile's lens:
+
 - **Engineer**: Full schema reference, indexing strategy, RLS policies, encryption, migration patterns, performance considerations
 - **Product**: Data model as it relates to features — what data the platform captures, how customer data is isolated, what reporting is possible
 - **Sales**: Data security story — encryption, tenant isolation, compliance, data sovereignty, audit trails
 
 **`dependencies/<profile_id>.md`** — Rewrite dependency docs through the profile's lens:
+
 - **Engineer**: Full dependency graph, version constraints, critical path analysis, failover behavior, and upgrade considerations
 - **Product**: Integration map — what external systems are required, what's optional, what partners/vendors are involved
 - **Sales**: Platform ecosystem — supported LLM providers, OCR services, LOS systems, and how the platform adapts to customer infrastructure
@@ -278,17 +297,18 @@ base_doc: "<relative path to base doc>"
 
 #### 10f. Tone and Length Guidelines
 
-| Profile | Tone | Typical Length | Audience |
-|---------|------|---------------|----------|
-| `engineer` | Technical, precise, code-aware | Long (80-100% of base) | Developers, DevOps, architects |
-| `product` | Business-oriented, feature-focused | Medium (50-70% of base) | Product managers, delivery leads |
-| `sales` | Customer-facing, zero jargon, value-driven | Short (30-50% of base) | Sales team, customer success |
+| Profile    | Tone                                       | Typical Length          | Audience                         |
+| ---------- | ------------------------------------------ | ----------------------- | -------------------------------- |
+| `engineer` | Technical, precise, code-aware             | Long (80-100% of base)  | Developers, DevOps, architects   |
+| `product`  | Business-oriented, feature-focused         | Medium (50-70% of base) | Product managers, delivery leads |
+| `sales`    | Customer-facing, zero jargon, value-driven | Short (30-50% of base)  | Sales team, customer success     |
 
 **IMPORTANT**: Each profile variant must be **self-contained** — a reader should fully understand the topic without needing to read the base doc. Do not just remove sections from the base doc; **rewrite and reframe** the information through the profile's lens.
 
 ### 11. Incremental Update Rules
 
 When updating existing docs:
+
 - **Read the current content first** before writing
 - **Preserve `<!-- manual -->` blocks**: Content between `<!-- manual -->` and `<!-- /manual -->` markers was added by humans — keep it intact
 - **Only update sections that changed**: If a submodule had no new commits, don't rewrite its section in cross-cutting docs
@@ -298,6 +318,7 @@ When updating existing docs:
 ### 12. Summary
 
 Print a summary to the user:
+
 - Which submodules were analyzed
 - Which doc files were created or updated
 - Key architectural insights discovered (anything surprising or noteworthy)
