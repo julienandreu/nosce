@@ -80,7 +80,9 @@ jobs:
         id: archive
         shell: bash
         run: |
-          NAME="nosce-${{ inputs.tag }}-${{ matrix.target }}"
+          TAG="${{ inputs.tag }}"
+          VERSION="${TAG##*v}"
+          NAME="nosce-v${VERSION}-${{ matrix.target }}"
           echo "name=${NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Package binary
@@ -123,7 +125,7 @@ jobs:
       - name: Generate latest.json manifest
         run: |
           TAG="${{ inputs.tag }}"
-          VERSION="${TAG#v}"
+          VERSION="${TAG##*v}"
           COMMIT="${{ github.sha }}"
           DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
@@ -132,7 +134,7 @@ jobs:
             BASENAME="$(basename "$f")"
             SHA256="$(sha256sum "$f" | awk '{print $1}')"
             SIZE="$(stat --printf='%s' "$f" 2>/dev/null || stat -f '%z' "$f")"
-            TARGET="$(echo "$BASENAME" | sed "s/nosce-${TAG}-//" | sed 's/\.tar\.gz//')"
+            TARGET="$(echo "$BASENAME" | sed 's/nosce-v[0-9][^-]*-//' | sed 's/\.tar\.gz//')"
             FILES=$(echo "$FILES" | jq --arg t "$TARGET" --arg n "$BASENAME" --arg s "$SHA256" --argjson sz "$SIZE" \
               '. + {($t): {name: $n, sha256: $s, size: $sz}}')
           done

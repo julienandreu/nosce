@@ -46,35 +46,57 @@ get_target() {
     esac
 }
 
+fetch_latest_release() {
+    API_URL="https://api.github.com/repos/${REPO}/releases/latest"
+    info "Fetching latest release info..."
+
+    TEMP_DIR="$(mktemp -d)"
+    curl -fsSL "$API_URL" -o "${TEMP_DIR}/release.json" || error "Failed to query GitHub API for latest release"
+
+    TAG="$(grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' "${TEMP_DIR}/release.json" | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)".*/\1/')"
+    [ -z "$TAG" ] && error "Failed to determine latest release tag"
+
+    VERSION="$(echo "$TAG" | sed 's/.*v//')"
+    [ -z "$VERSION" ] && error "Failed to parse version from tag: $TAG"
+
+    rm -rf "$TEMP_DIR"
+}
+
 fetch_manifest() {
-    MANIFEST_URL="https://github.com/${REPO}/releases/download/latest/latest.json"
-    info "Fetching release manifest..."
+    MANIFEST_URL="https://github.com/${REPO}/releases/download/${TAG}/latest.json"
+    info "Fetching release manifest for ${TAG}..."
 
-    MANIFEST="$(curl -fsSL "$MANIFEST_URL")" || error "Failed to fetch latest.json"
+    TEMP_DIR="$(mktemp -d)"
+    curl -fsSL "$MANIFEST_URL" -o "${TEMP_DIR}/manifest.json" || {
+        warn "No manifest found, falling back to direct download"
+        ASSET_NAME="nosce-v${VERSION}-${TARGET}.tar.gz"
+        EXPECTED_SHA256=""
+        rm -rf "$TEMP_DIR"
+        return
+    }
 
-    VERSION="$(echo "$MANIFEST" | grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
-    [ -z "$VERSION" ] && error "Failed to parse version from manifest"
+    ASSET_NAME="$(grep -A3 "\"$TARGET\"" "${TEMP_DIR}/manifest.json" | grep '"name"' | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)".*/\1/')"
+    [ -z "$ASSET_NAME" ] && {
+        warn "Target $TARGET not in manifest, using default naming"
+        ASSET_NAME="nosce-v${VERSION}-${TARGET}.tar.gz"
+    }
 
-    TAG="$(echo "$MANIFEST" | grep -o '"tag"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
-    [ -z "$TAG" ] && error "Failed to parse tag from manifest"
+    EXPECTED_SHA256="$(grep -A3 "\"$TARGET\"" "${TEMP_DIR}/manifest.json" | grep '"sha256"' | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)".*/\1/')"
 
-    ASSET_NAME="$(echo "$MANIFEST" | grep -A3 "\"$TARGET\"" | grep '"name"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
-    [ -z "$ASSET_NAME" ] && error "No asset found for target: $TARGET"
-
-    EXPECTED_SHA256="$(echo "$MANIFEST" | grep -A3 "\"$TARGET\"" | grep '"sha256"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+    rm -rf "$TEMP_DIR"
 }
 
 install() {
     info "Detected: $OS $ARCH"
     info "Target:   $TARGET"
-    info "Version:  $VERSION"
+    info "Version:  $VERSION (${TAG})"
 
     DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET_NAME}"
     TEMP_DIR="$(mktemp -d)"
     ARCHIVE="${TEMP_DIR}/${BINARY_NAME}.tar.gz"
 
     info "Downloading ${ASSET_NAME}..."
-    curl -fsSL "$DOWNLOAD_URL" -o "$ARCHIVE" || error "Failed to download binary"
+    curl -fsSL "$DOWNLOAD_URL" -o "$ARCHIVE" || error "Failed to download binary from ${DOWNLOAD_URL}"
 
     if [ -n "$EXPECTED_SHA256" ]; then
         info "Verifying checksum..."
@@ -118,6 +140,7 @@ main() {
     detect_os
     detect_arch
     get_target
+    fetch_latest_release
     fetch_manifest
     install
     verify
