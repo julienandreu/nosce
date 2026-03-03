@@ -137,8 +137,8 @@ jobs:
               '. + {($t): {name: $n, sha256: $s, size: $sz}}')
           done
 
-          jq -n --arg v "$VERSION" --arg c "$COMMIT" --arg d "$DATE" --argjson f "$FILES" \
-            '{version: $v, commit: $c, date: $d, files: $f}' > release/latest.json
+          jq -n --arg v "$VERSION" --arg t "$TAG" --arg c "$COMMIT" --arg d "$DATE" --argjson f "$FILES" \
+            '{version: $v, tag: $t, commit: $c, date: $d, files: $f}' > release/latest.json
 
       - name: Upload assets to GitHub Release
         env:
@@ -153,3 +153,26 @@ jobs:
             release/checksums.txt \
             release/latest.json \
             --clobber
+
+  update-latest:
+    name: Update latest release pointer
+    needs: upload
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download latest.json from versioned release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${{ inputs.tag }}" --pattern latest.json --dir .
+
+      - name: Update latest tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest \
+            --title "Latest Release (${{ inputs.tag }})" \
+            --notes "Auto-updated pointer to ${{ inputs.tag }}." \
+            --latest=false
+          gh release upload latest latest.json --clobber
