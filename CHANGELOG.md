@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/julienandreu/nosce/compare/nosce-v1.0.1...nosce-v1.1.0) (2026-03-03)
+
+
+### Features
+
+* restructure project, add interactive CLI commands, and enhance web UI ([#4](https://github.com/julienandreu/nosce/issues/4)) ([92287e6](https://github.com/julienandreu/nosce/commit/92287e68344f303c9cdd4115a762cd0e6b0570c0))
+
 ## [1.0.1](https://github.com/julienandreu/nosce/compare/nosce-v1.0.0...nosce-v1.0.1) (2026-03-03)
 
 
