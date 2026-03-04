@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/julienandreu/nosce/compare/v1.2.0...v1.3.0) (2026-03-04)
+
+
+### Features
+
+* surface PR screenshots and videos in architecture documentation ([#10](https://github.com/julienandreu/nosce/issues/10)) ([d098435](https://github.com/julienandreu/nosce/commit/d098435df34ee945bfb3af492ff3426998dd3b32))
+
 ## [1.2.0](https://github.com/julienandreu/nosce/compare/v1.1.1...v1.2.0) (2026-03-03)
 
 
