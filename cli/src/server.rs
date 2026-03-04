@@ -22,6 +22,58 @@ use crate::config::ProfileDef;
 use crate::fs_ops;
 use crate::prompts;
 
+/// MCP prompt arguments are always strings (`Record<string, string>`).
+/// This deserializer accepts a boolean, a stringified boolean ("true"/"false"/"1"/"0"),
+/// or an empty string (treated as None).
+fn deserialize_optional_bool_lenient<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de;
+
+    struct Visitor;
+
+    impl<'de> de::Visitor<'de> for Visitor {
+        type Value = Option<bool>;
+
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a boolean, a string boolean, or null")
+        }
+
+        fn visit_bool<E: de::Error>(self, v: bool) -> Result<Self::Value, E> {
+            Ok(Some(v))
+        }
+
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
+            match v {
+                "" => Ok(None),
+                "true" | "1" | "yes" => Ok(Some(true)),
+                "false" | "0" | "no" => Ok(Some(false)),
+                _ => Err(de::Error::invalid_value(de::Unexpected::Str(v), &self)),
+            }
+        }
+
+        fn visit_none<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+
+        fn visit_unit<E: de::Error>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+    }
+
+    deserializer.deserialize_any(Visitor)
+}
+
+/// Treats empty strings as None for optional string prompt arguments.
+fn deserialize_optional_string_lenient<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let opt = Option::<String>::deserialize(deserializer)?;
+    Ok(opt.filter(|s| !s.is_empty()))
+}
+
 #[derive(Clone)]
 pub struct NosceServer {
     output_dir: PathBuf,
@@ -56,7 +108,7 @@ pub struct ListReportsParams {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetDocParams {
-    /// Document category: overview, architecture, apis, databases, or dependencies
+    /// Document category: overview, architecture, apis, databases, dependencies, or gallery
     pub category: String,
 }
 
@@ -148,14 +200,17 @@ pub struct WriteMediaParams {
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct SyncPromptParams {
     /// Target date in YYYY-MM-DD format. Defaults to today.
+    #[serde(default, deserialize_with = "deserialize_optional_string_lenient")]
     pub date: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct DocsPromptParams {
     /// If provided, only generate docs for this specific submodule
+    #[serde(default, deserialize_with = "deserialize_optional_string_lenient")]
     pub submodule: Option<String>,
     /// Force full regeneration, ignoring timestamps
+    #[serde(default, deserialize_with = "deserialize_optional_bool_lenient")]
     pub full: Option<bool>,
 }
 
@@ -288,7 +343,7 @@ impl NosceServer {
 
     #[tracing::instrument(skip(self), level = "debug")]
     #[tool(
-        description = "Get a documentation file by category. Categories: overview, architecture, apis, databases, dependencies."
+        description = "Get a documentation file by category. Categories: overview, architecture, apis, databases, dependencies, gallery."
     )]
     async fn get_doc(
         &self,
@@ -300,6 +355,7 @@ impl NosceServer {
             "apis",
             "databases",
             "dependencies",
+            "gallery",
         ];
 
         if !VALID.contains(&params.category.as_str()) {
@@ -715,6 +771,7 @@ impl ServerHandler for NosceServer {
             "apis",
             "databases",
             "dependencies",
+            "gallery",
         ] {
             let path = self.output_dir.join("docs").join(format!("{category}.md"));
             if fs_ops::path_exists(&path).await {

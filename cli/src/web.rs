@@ -224,6 +224,7 @@ async fn api_nav(State(state): State<Arc<AppState>>) -> Json<NavResponse> {
         "apis",
         "databases",
         "dependencies",
+        "gallery",
     ];
     let mut docs = Vec::new();
     for cat in &categories {

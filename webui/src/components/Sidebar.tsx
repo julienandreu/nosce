@@ -130,7 +130,8 @@ const DOC_LABELS: Record<string, string> = {
   architecture: 'Architecture',
   apis: 'APIs',
   databases: 'Databases',
-  dependencies: 'Dependencies'
+  dependencies: 'Dependencies',
+  gallery: 'Gallery'
 };
 
 function docLabel(cat: string): string {
@@ -207,6 +208,9 @@ export function Sidebar({ nav, onOpenSearch }: SidebarProps): preact.JSX.Element
           </NavLink>
           <NavLink href="/docs/dependencies" active={currentPath === '/docs/dependencies'}>
             Dependencies
+          </NavLink>
+          <NavLink href="/docs/gallery" active={currentPath === '/docs/gallery'}>
+            Gallery
           </NavLink>
         </>
       )}
