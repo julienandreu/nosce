@@ -113,6 +113,37 @@ For each submodule in scope, do a **thorough scan** of all architectural indicat
 
 **IMPORTANT**: Read thoroughly, not selectively. The quality of the generated documentation directly depends on how much source code you actually read. For large files (>500 lines), read the first 200 lines to understand the structure, then grep for key patterns (class definitions, function signatures, route registrations, table definitions).
 
+### 6b. Collect Available Media
+
+Scan all media manifests to build a per-repo inventory of screenshots and videos. This media was captured from PR attachments during syncs and provides visual context for documentation.
+
+1. **List media dates**: Run `ls <output>/media/` to find all date directories containing `manifest.json`.
+
+2. **Read manifests**: For each date directory, read `<output>/media/<date>/manifest.json`. Each manifest contains an `items` array with entries like:
+
+   ```json
+   {
+     "filename": "desktop-app-v2-pr72-1.png",
+     "type": "image",
+     "repo": "desktop-app-v2",
+     "pr_number": 72,
+     "pr_title": "fix(auth): better error handling",
+     "author": "julienandreu",
+     "alt": "Screenshot of new error dialog",
+     "original_url": "https://user-images.githubusercontent.com/..."
+   }
+   ```
+
+3. **Build per-repo media index**: Group all media items by `repo` across all dates. For each repo, keep the items sorted by date (most recent first). This gives you a complete visual history for each submodule.
+
+4. **Select representative media**: For each repo, pick the **most recent N items** (up to 6 images, 2 videos) that best illustrate the current state of the service. Prefer:
+   - Screenshots showing UI/UX (most valuable for non-engineer audiences)
+   - Architecture diagrams or flow visualizations
+   - Before/after comparisons
+   - Demo videos showing features in action
+
+This media index will be used in Steps 7, 8, and 10.
+
 ### 7. Analyze and Generate Per-Submodule Docs (Claude's Core Role)
 
 **Linking convention**: When referencing GitHub repositories, PRs, commits, or authors in the documentation body, always use markdown links. Repository references should link to `https://github.com/saris-ai/<repo>` (e.g., `[saris-ai/<repo>](https://github.com/saris-ai/<repo>)`). Author references should use `[@author](https://github.com/author)`. The renderer automatically adds `target="_blank"` to external links — just use standard markdown link syntax.
@@ -179,6 +210,26 @@ branch: "<branch>"
 ## Configuration
 
 <Key configuration options and environment variables that affect behavior>
+
+## Screenshots & Videos
+
+<If the per-repo media index from Step 6b has items for this submodule, include them here. This section makes the documentation tangible — readers can SEE what the service looks like.>
+
+**Images** — embed inline using `/api/media/<date>/<filename>` paths:
+
+| | |
+| --- | --- |
+| ![<alt>](/api/media/<date>/<filename>) | [**#<pr_number>**](https://github.com/saris-ai/<name>/pull/<pr_number>) — <pr_title> ([@<author>](https://github.com/<author>)) |
+
+**Videos** — link (markdown cannot inline video):
+
+| | |
+| --- | --- |
+| [Video: <alt>](/api/media/<date>/<filename>) | [**#<pr_number>**](https://github.com/saris-ai/<name>/pull/<pr_number>) — <pr_title> ([@<author>](https://github.com/<author>)) |
+
+Group media by theme (e.g., "User Interface", "API Responses", "Admin Dashboard") rather than chronologically. Use the `alt` text and PR title to infer the best grouping. Only show the most recent media that reflects the **current state** of the service — skip outdated screenshots superseded by newer ones.
+
+If no media exists for this submodule, omit this section entirely.
 ```
 
 ### 8. Synthesize Cross-Cutting Docs (Claude's Architectural Analysis)
@@ -219,6 +270,17 @@ After updating per-submodule docs, read ALL per-submodule docs from `<output>/do
 - Shared libraries and internal packages
 - External service dependencies (third-party APIs, cloud services)
 - Critical path analysis: which dependencies are hard requirements vs optional
+
+**`<output>/docs/gallery.md`** — Visual gallery (only if media exists):
+
+- Curated selection of the best screenshots and videos across all submodules
+- Grouped by service/submodule, then by theme (UI, admin, API responses, etc.)
+- Each item links back to the PR that introduced it
+- Embed images inline: `![alt](/api/media/<date>/<filename>)`
+- Link videos: `[Video: alt](/api/media/<date>/<filename>)`
+- This page gives non-technical stakeholders a quick visual tour of what the platform looks like and does
+- Only include the most recent, representative media — not every screenshot ever captured
+- If no media exists at all, skip this file entirely
 
 ### 9. Monorepo Per-Package Documentation
 
@@ -271,13 +333,22 @@ For **every** category doc, create `<output>/docs/<category>/<profile_id>.md`. U
 - **Product**: Integration map — what external systems are required, what's optional, what partners/vendors are involved
 - **Sales**: Platform ecosystem — supported LLM providers, OCR services, LOS systems, and how the platform adapts to customer infrastructure
 
+**`gallery/<profile_id>.md`** — Rewrite the visual gallery through the profile's lens (only if `gallery.md` exists):
+
+- **Engineer**: Omit the gallery — engineers read code, not screenshots. Skip this file for the `engineer` profile.
+- **Product**: Curated screenshots showing feature completeness, user flows, and UX polish. Emphasize what shipped and how it looks to end users. Include all UI screenshots and demo videos.
+- **Sales**: Highlight customer-facing screens, demo-worthy features, and polished UI. Frame each screenshot as a capability story — what the customer sees and what value it delivers. This is the "show, don't tell" page for sales decks and prospect demos.
+- **Customer Experience / QA**: Focus on user-facing changes, before/after comparisons, and UI improvements that affect the end-user experience.
+
 #### 10c. Generate Profile Variants for Per-Submodule Docs
 
 For **every** submodule doc, create `<output>/docs/submodules/<name>/<profile_id>.md`. Use `mkdir -p` to create the directory first.
 
 - **Engineer**: Full technical deep-dive — code architecture, patterns, entry points, configuration, testing strategy, deployment concerns, and inter-service contracts
-- **Product**: What this service does for the product — features it enables, how it fits in the user journey, configuration options that affect customer experience, and integration capabilities
-- **Sales**: What this service means for customers — the value it provides, competitive advantages, customer-facing capabilities, and answers to common prospect questions about this area
+- **Product**: What this service does for the product — features it enables, how it fits in the user journey, configuration options that affect customer experience, and integration capabilities. **Include screenshots** from the media index — embed them near the features they illustrate.
+- **Sales**: What this service means for customers — the value it provides, competitive advantages, customer-facing capabilities, and answers to common prospect questions about this area. **Include screenshots** that show polished UI and demo-worthy features — frame them as proof points.
+
+**Media in per-submodule profile variants:** When the base submodule doc has a "Screenshots & Videos" section, carry the media forward into `product`, `sales`, `customer-experience`, and `qa` profile variants. Embed the same `/api/media/<date>/<filename>` images. For `engineer`, `cto`, and `head-of-engineering` profiles, omit screenshots to keep docs focused on technical content.
 
 #### 10d. Generate Profile Variants for Per-Package Docs (if packages exist)
 
@@ -321,6 +392,7 @@ Print a summary to the user:
 
 - Which submodules were analyzed
 - Which doc files were created or updated
+- How many media items were included (images and videos, broken down by submodule)
 - Key architectural insights discovered (anything surprising or noteworthy)
 - Any submodules that could not be fully analyzed (and why)
 - Path to the generated documentation

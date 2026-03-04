@@ -1213,7 +1213,7 @@ checksum = "189900f581af8fe6a8e02d4a31aecffbebcdb7a0266a7aed3c35f14fc4ca6bf8"
 
 [[package]]
 name = "nosce"
-version = "1.1.1"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "axum",
