@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/julienandreu/nosce/compare/v1.3.0...v1.3.1) (2026-06-01)
+
+
+### Documentation
+
+* add installation section to README ([#16](https://github.com/julienandreu/nosce/issues/16)) ([8590b9c](https://github.com/julienandreu/nosce/commit/8590b9cc32d2725981f4f54b12aca5f7992e1472))
+
 ## [1.3.0](https://github.com/julienandreu/nosce/compare/v1.2.0...v1.3.0) (2026-03-04)
 
 
